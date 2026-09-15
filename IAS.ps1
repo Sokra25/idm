@@ -20,32 +20,24 @@ $FilePath = if ($isAdmin) {
 }
 
 try {
+    Write-Host "Downloading..."
     $response = Invoke-WebRequest -Uri $DownloadURL -UseBasicParsing
 }
 catch {
-    Write-Host "Download failed: $($_.Exception.Message)"
+    Write-Host "Download failed:"
+    Write-Host $_.Exception.Message
     exit 1
 }
 
 if ([string]::IsNullOrWhiteSpace($response.Content)) {
-    Write-Host "Downloaded file is empty."
+    Write-Host "The downloaded file is empty."
     exit 1
 }
 
-$ScriptArgs = "$args"
 $prefix = "@REM $rand`r`n"
 $content = $prefix + $response.Content
 
 Set-Content -Path $FilePath -Value $content -Encoding ASCII
 
-Start-Process -FilePath $FilePath -ArgumentList $ScriptArgs -Wait
-
-$FilePaths = @(
-    "$env:TEMP\IAS*.cmd",
-    "$env:SystemRoot\Temp\IAS*.cmd"
-)
-
-foreach ($Path in $FilePaths) {
-    Get-Item $Path -ErrorAction SilentlyContinue |
-        Remove-Item -Force -ErrorAction SilentlyContinue
-}
+Write-Host "Downloaded successfully to:"
+Write-Host $FilePath
