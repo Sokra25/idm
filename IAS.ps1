@@ -1,26 +1,51 @@
 $ErrorActionPreference = "Stop"
-# Enable TLSv1.2 for compatibility with older clients
-[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+# Enable TLS 1.2
+[Net.ServicePointManager]::SecurityProtocol = `
+    [Net.ServicePointManager]::SecurityProtocol -bor `
+    [Net.SecurityProtocolType]::Tls12
 
 $DownloadURL = 'https://raw.githubusercontent.com/lstprjct/IDM-Activation-Script/main/IAS.cmd'
 
 $rand = Get-Random -Maximum 99999999
-$isAdmin = [bool]([Security.Principal.WindowsIdentity]::GetCurrent().Groups -match 'S-1-5-32-544')
-$FilePath = if ($isAdmin) { "$env:SystemRoot\Temp\IAS_$rand.cmd" } else { "$env:TEMP\IAS_$rand.cmd" }
+
+$isAdmin = [bool](
+    [Security.Principal.WindowsIdentity]::GetCurrent().Groups -match 'S-1-5-32-544'
+)
+
+$FilePath = if ($isAdmin) {
+    "$env:SystemRoot\Temp\IAS_$rand.cmd"
+} else {
+    "$env:TEMP\IAS_$rand.cmd"
+}
 
 try {
     $response = Invoke-WebRequest -Uri $DownloadURL -UseBasicParsing
 }
 catch {
-    $response = Invoke-WebRequest -Uri $DownloadURL2 -UseBasicParsing
+    Write-Host "Download failed: $($_.Exception.Message)"
+    exit 1
 }
 
-$ScriptArgs = "$args "
-$prefix = "@REM $rand `r`n"
-$content = $prefix + $response
-Set-Content -Path $FilePath -Value $content
+if ([string]::IsNullOrWhiteSpace($response.Content)) {
+    Write-Host "Downloaded file is empty."
+    exit 1
+}
 
-Start-Process $FilePath $ScriptArgs -Wait
+$ScriptArgs = "$args"
+$prefix = "@REM $rand`r`n"
+$content = $prefix + $response.Content
 
-$FilePaths = @("$env:TEMP\IAS*.cmd", "$env:SystemRoot\Temp\IAS*.cmd")
-foreach ($FilePath in $FilePaths) { Get-Item $FilePath | Remove-Item }
+Set-Content -Path $FilePath -Value $content -Encoding ASCII
+
+Start-Process -FilePath $FilePath -ArgumentList $ScriptArgs -Wait
+
+$FilePaths = @(
+    "$env:TEMP\IAS*.cmd",
+    "$env:SystemRoot\Temp\IAS*.cmd"
+)
+
+foreach ($Path in $FilePaths) {
+    Get-Item $Path -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+}
